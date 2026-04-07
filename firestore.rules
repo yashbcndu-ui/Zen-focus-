@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (auth.uid)
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string
+    //   - photoURL: string
+    //   - createdAt: timestamp (required)
+    //   - streak: number
+    //   - totalPoints: number
+    //   - dailyCalorieGoal: number
+    //   - lastLoggedAt: timestamp
+    //   - badges: list (strings)
+    //
+    // Collection: foodLogs
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required)
+    //   - date: string (required, YYYY-MM-DD)
+    //   - mealName: string (required)
+    //   - imageUrl: string
+    //   - calories: number (required)
+    //   - protein: number (required)
+    //   - carbs: number (required)
+    //   - fat: number (required)
+    //   - analysis: string
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.createdAt is timestamp &&
+             (!('streak' in data) || data.streak is number) &&
+             (!('totalPoints' in data) || data.totalPoints is number) &&
+             (!('dailyCalorieGoal' in data) || data.dailyCalorieGoal is number) &&
+             (!('badges' in data) || data.badges is list);
+    }
+
+    function isValidFoodLog(data) {
+      return data.keys().hasAll(['userId', 'date', 'mealName', 'calories', 'protein', 'carbs', 'fat', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.date is string &&
+             data.mealName is string && data.mealName.size() > 0 && data.mealName.size() < 100 &&
+             data.calories is number &&
+             data.protein is number &&
+             data.carbs is number &&
+             data.fat is number &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFocusSession(data) {
+      return data.keys().hasAll(['userId', 'type', 'duration', 'startTime', 'completed', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.type in ['deep_work', 'meditation'] &&
+             data.duration is int && data.duration > 0 &&
+             data.startTime is timestamp &&
+             data.completed is bool &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /foodLogs/{logId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || request.auth.token.email == "yashbcndu@gmail.com");
+      allow create: if isAuthenticated() && isValidFoodLog(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && isValidFoodLog(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner();
+    }
+
+    match /focusSessions/{sessionId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidFocusSession(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && isValidFocusSession(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner();
+    }
+    
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
