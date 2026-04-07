@@ -36,3 +36,13 @@ export interface AppUsage {
   category: string;
   icon: string;
 }
+
+export interface InterventionHistory {
+  userId: string;
+  intervention: string;
+  mood: string;
+  timeOfDay: string;
+  dayOfWeek: string;
+  wasHelpful: boolean;
+  createdAt: Timestamp;
+}
